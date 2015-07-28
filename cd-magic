@@ -87,6 +87,36 @@ function parse_command_line()
 }
 
 
+function get_list_entry()
+{
+	# cd +1		LIST+1 next place
+	# cd +2		LIST+2 two places
+	# cd +3		LIST+3 three places
+	# etc
+
+	[[ "$1" =~ ^\+[0-9]*$ ]] || return
+
+	local COUNT=${#CD_DIR_LIST[@]}
+	[ $COUNT -gt 0 ] || return
+
+	local INDEX="${1:1}"
+	[ "$INDEX" ] || INDEX=1
+
+	if [ $INDEX = 0 ]; then
+		ARGS=()
+		return 1
+	fi
+
+	if [ $INDEX -ge $COUNT ]; then
+		echo "Can't read cd list $INDEX, there are only $((COUNT-1)) entries"
+		return 1
+	fi
+
+	ARGS=("${CD_DIR_LIST[$INDEX]}")
+	CD_DIR_LIST=("${CD_DIR_LIST[@]:$INDEX}" "${CD_DIR_LIST[@]:0:$INDEX}")
+	return 0
+}
+
 function get_history_entry()
 {
 	# cd -		cd "$OLDPWD"
@@ -100,6 +130,11 @@ function get_history_entry()
 	local COUNT=${#CD_HISTORY[@]}
 	local INDEX="${1:1}"
 	[ "$INDEX" ] || INDEX=1
+
+	if [ $COUNT = 1 ]; then
+		ARGS=()
+		return 1
+	fi
 
 	if [ $INDEX -ge $COUNT ]; then
 		echo "Can't read cd history $INDEX, there are only $((COUNT-1)) entries"
@@ -191,6 +226,7 @@ function list_start()
 	alias n='cd -n'
 	alias p='cd -p'
 	ARGS=(${CD_DIR_LIST[0]})
+	pushd . >& /dev/null
 }
 
 function list_next()
@@ -217,6 +253,7 @@ function list_end()
 	unset CD_DIR_LIST
 	unalias n >& /dev/null
 	unalias p >& /dev/null
+	popd >& /dev/null
 	return 0
 }
 
@@ -226,9 +263,11 @@ function list_show()
 
 	if [ "$CD_DIR_LIST" ]; then
 		echo "cd list:"
-		for DIR in "${CD_DIR_LIST[@]}"; do
+		local COUNT=${#CD_DIR_LIST[@]}
+		for ((i = 0; i < COUNT; i++)); do
+			DIR="${CD_DIR_LIST[$i]}"
 			DIR=${DIR/$HOME/\~}
-			echo -e "\t$DIR"
+			printf "\t%3s %s\n" "+$i" "$DIR"
 		done
 	else
 		echo "cd history:"
@@ -262,6 +301,7 @@ function args_one()
 
 	[[ "$OPTIONS" =~ s ]] && save_dir && return
 
+	get_list_entry     "$ARG" && return
 	get_history_entry  "$ARG" && return
 	process_git_branch "$ARG" && return
 }
@@ -300,4 +340,7 @@ function cd()
 	return $RETVAL
 }
 
+
+# Seed the history list
+add_to_history $(pwd)
 
