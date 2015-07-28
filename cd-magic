@@ -353,7 +353,11 @@ function cd()
 
 	# DIRls : cd DIR; ls
 	if [ "$OPT_LS" = 1 ]; then
-		ls --group-directories-first -lL -T 0 --color=auto -I .\*swp -I lost+found
+		if [ "$CD_LS_COMMAND" ]; then
+			$CD_LS_COMMAND
+		else
+			ls
+		fi
 	fi
 
 	return $RETVAL
