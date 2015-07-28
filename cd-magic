@@ -1,6 +1,10 @@
 function remove_trailing_slash()
 {
-	echo "${1%/}"
+	if [ "$1" = / ]; then
+		echo /
+	else
+		echo "${1%/}"
+	fi
 }
 
 function fake_dirs()
@@ -20,6 +24,31 @@ function fake_dirs()
 	remove_trailing_slash "$ARG"
 }
 
+function process_link()
+{
+	local FILE="$1"
+
+	if [ -L "$FILE" -a -f "$FILE" ]; then
+		FILE="$(readlink "$FILE")"
+	fi
+
+	echo "$FILE"
+}
+
+function process_file()
+{
+	local FILE="$1"
+	if [ -f "$FILE" ]; then
+		if [[ "$FILE" =~ / ]]; then
+			FILE="${FILE%/*}"
+		else
+			return
+		fi
+	fi
+
+	echo "$FILE"
+}
+
 function process_dir()
 {
 	DIR="$1"
@@ -30,20 +59,6 @@ function process_dir()
 	fi
 
 	echo "$DIR"
-}
-
-function process_file()
-{
-	FILE="$1"
-	if [ -f "$FILE" ]; then
-		if [[ "$FILE" =~ / ]]; then
-			FILE="${FILE%/*}"
-		else
-			return
-		fi
-	fi
-
-	echo "$FILE"
 }
 
 function parse_command_line()
@@ -79,6 +94,7 @@ function parse_command_line()
 		# Transforms
 		ARG=$(remove_trailing_slash "$ARG")
 		ARG=$(fake_dirs             "$ARG")
+		ARG=$(process_link          "$ARG")
 		ARG=$(process_file          "$ARG")
 		ARG=$(process_dir           "$ARG")
 
@@ -178,6 +194,8 @@ function dereference_symlinks()
 function save_dir()
 {
 	eval local DIR="$1"
+
+	[ "$DIR" ] || DIR="$(pwd)"
 
 	if [ "$DIR" = "$HOME" ]; then
 		unset CD_SAVE_DIR
@@ -299,7 +317,7 @@ function args_one()
 {
 	local ARG="${ARGS[0]}"
 
-	[[ "$OPTIONS" =~ s ]] && save_dir && return
+	[[ "$OPTIONS" =~ s ]] && save_dir "$ARG" && return
 
 	get_list_entry     "$ARG" && return
 	get_history_entry  "$ARG" && return
