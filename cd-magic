@@ -1,0 +1,322 @@
+function remove_trailing_slash()
+{
+	echo "${1%/}"
+}
+
+function fake_dirs()
+{
+	# cd ..		cd ..
+	# cd ...	cd ../..
+	# cd ....	cd ../../..
+	# etc
+
+	local ARG="$1"
+
+	if [[ "$ARG" =~ ^\.\.+$ ]]; then
+		ARG="${1:1}"
+		ARG="${ARG//./..\/}"
+	fi
+
+	remove_trailing_slash "$ARG"
+}
+
+function process_dir()
+{
+	DIR="$1"
+	if [ -d "$DIR" ]; then
+		# dot is a no-op
+		[ "$DIR" = "."      ] && return
+		[ "$DIR" = "$(pwd)" ] && return
+	fi
+
+	echo "$DIR"
+}
+
+function process_file()
+{
+	FILE="$1"
+	if [ -f "$FILE" ]; then
+		if [[ "$FILE" =~ / ]]; then
+			FILE="${FILE%/*}"
+		else
+			return
+		fi
+	fi
+
+	echo "$FILE"
+}
+
+function parse_command_line()
+{
+	# -l	list places/history
+	# -s	save/clear CD_SAVE_DIR
+	# -d	dereference symlinks
+	# -n	next dir in list
+	# -p	prev dir in list
+	# -x	quit cd list
+	# *ls	cd; ls
+
+	local ARG
+
+	for ARG in "$@"; do
+		if [[ "$ARG" =~ ^-[lsdnpx]$ ]]; then
+			OPTIONS="$OPTIONS${ARG:1:1}"
+			continue
+		fi
+		if [[ "$ARG" =~ ^-[a-z] ]]; then
+			echo "Unknown option '$ARG'"
+			continue
+		fi
+		if [[ "$ARG" =~ .ls$ ]]; then
+			local REAL="${ARG%ls}"
+			if [ -r "$REAL" ]; then
+				OPT_LS=1
+				ARGS+=("$REAL")
+				continue
+			fi
+		fi
+
+		# Transforms
+		ARG=$(remove_trailing_slash "$ARG")
+		ARG=$(fake_dirs             "$ARG")
+		ARG=$(process_file          "$ARG")
+		ARG=$(process_dir           "$ARG")
+
+		ARGS+=("$ARG")
+	done
+}
+
+
+function get_history_entry()
+{
+	# cd -		cd "$OLDPWD"
+	# cd -1		HISTORY-1 previous place
+	# cd -2		HISTORY-2 two places ago
+	# cd -3		HISTORY-3 three places ago
+	# 	etc
+
+	[[ "$1" =~ ^-[0-9]*$ ]] || return
+
+	local COUNT=${#CD_HISTORY[@]}
+	local INDEX="${1:1}"
+	[ "$INDEX" ] || INDEX=1
+
+	if [ $INDEX -ge $COUNT ]; then
+		echo "Can't read cd history $INDEX, there are only $((COUNT-1)) entries"
+		return 1
+	fi
+
+	# echo "HISTORY: ${CD_HISTORY[$INDEX]}"
+	ARGS=("${CD_HISTORY[$INDEX]}")
+	return 0
+}
+
+function add_to_history()
+{
+	local ITEM="$1"
+	[ "$ITEM" ] || return
+
+	local i
+	for ((i = ${#CD_HISTORY[@]}; i >= 0; i--)); do
+		if [ "${CD_HISTORY[i]}" = "$ITEM" ]; then
+			CD_HISTORY=("${CD_HISTORY[@]:0:i}" "${CD_HISTORY[@]:$((i+1))}")
+		fi
+	done
+
+	CD_HISTORY=("$ITEM" "${CD_HISTORY[@]}")
+
+	# Set a default (if needed)
+	: ${CD_HISTORY_MAX:=50}
+
+	# Truncate
+	CD_HISTORY=("${CD_HISTORY[@]:0:$CD_HISTORY_MAX}")
+
+	return 0
+}
+
+
+function dereference_symlinks()
+{
+	ARGS=($(pwd -P))
+	return 0
+}
+
+function save_dir()
+{
+	eval local DIR="$1"
+
+	if [ "$DIR" = "$HOME" ]; then
+		unset CD_SAVE_DIR
+	else
+		CD_SAVE_DIR="$DIR"
+	fi
+
+	echo "SET CD_SAVE_DIR $DIR"
+	ARGS=("$DIR")
+	return 0
+}
+
+
+function get_git_branch()
+{
+	local branch="$(git branch)"
+	branch=${branch##*\* }
+	eval branch=${branch%% *}
+	echo "$branch"
+}
+
+function is_git_branch()
+{
+	local DIR="$1"
+
+	[ "$DIR" ] || return
+
+	git branch 2> /dev/null | grep -Fqw "$DIR"
+}
+
+function process_git_branch()
+{
+	is_git_branch "$1" || return
+
+	local BRANCH=$(get_git_branch)
+
+	[ "$1" = "$BRANCH" ] && return 0
+
+	git checkout -q "$1"
+	# return if different => need to change caller to alter args
+}
+
+
+function list_start()
+{
+	CD_DIR_LIST=("$@")
+	alias n='cd -n'
+	alias p='cd -p'
+	ARGS=(${CD_DIR_LIST[0]})
+}
+
+function list_next()
+{
+	[ ${#CD_DIR_LIST[@]} = 0 ] && echo NO LIST && return 1
+
+	CD_DIR_LIST=("${CD_DIR_LIST[@]:1}" "${CD_DIR_LIST[@]:0:1}")
+	ARGS=(${CD_DIR_LIST[0]})
+	return 0
+}
+
+function list_prev()
+{
+	[ ${#CD_DIR_LIST[@]} = 0 ] && echo NO LIST && return 1
+
+	LAST=$((${#CD_DIR_LIST[@]} - 1))
+	CD_DIR_LIST=("${CD_DIR_LIST[@]:$LAST}" "${CD_DIR_LIST[@]:0:$LAST}")
+	ARGS=(${CD_DIR_LIST[0]})
+	return 0
+}
+
+function list_end()
+{
+	unset CD_DIR_LIST
+	unalias n >& /dev/null
+	unalias p >& /dev/null
+	return 0
+}
+
+function list_show()
+{
+	if [ "$CD_DIR_LIST" ]; then
+		echo "cd list:"
+		local DIR
+		for DIR in "${CD_DIR_LIST[@]}"; do
+			echo -e "\t$DIR"
+		done
+	else
+		echo "cd history:"
+		local COUNT=${#CD_HISTORY[@]}
+		local i
+		for ((i = 1; i < COUNT; i++)); do
+			printf "\t%3d %s\n" -$i "${CD_HISTORY[$i]}"
+		done
+	fi
+	return 0
+}
+
+
+function args_zero()
+{
+	[[ "$OPTIONS" =~ d ]] && dereference_symlinks && return
+	[[ "$OPTIONS" =~ l ]] && list_show            && return
+	[[ "$OPTIONS" =~ n ]] && list_next            && return
+	[[ "$OPTIONS" =~ p ]] && list_prev            && return
+	[[ "$OPTIONS" =~ s ]] && save_dir             && return
+	[[ "$OPTIONS" =~ x ]] && list_end             && return
+
+	[ "$CD_SAVE_DIR" ] && ARGS=("$CD_SAVE_DIR") || ARGS=("$HOME")
+}
+
+function args_one()
+{
+	local ARG="${ARGS[0]}"
+
+	[[ "$OPTIONS" =~ s ]] && save_dir && return
+
+	get_history_entry  "$ARG" && return
+	process_git_branch "$ARG" && return
+}
+
+function args_many()
+{
+	list_start "$@"
+}
+
+
+function dump()
+{
+	echo "OPTIONS: $OPTIONS"
+
+	echo -n "ARGS: "
+	for ARG in "${ARGS[@]}"; do
+		echo -n "'$ARG' "
+	done
+	echo
+
+	echo -n "CD_DIR_LIST: "
+	for DIR in "${CD_DIR_LIST[@]}"; do
+		echo -n "'$DIR' "
+	done
+	echo
+
+	echo "CD_SAVE_DIR: $CD_SAVE_DIR"
+}
+
+function cd()
+{
+	local OPTIONS=""
+	local OPT_LS=0
+	local ARGS=()
+
+	parse_command_line "$@"
+
+	[ ${#ARGS[@]}   = 0 ] && args_zero
+	[ ${#ARGS[@]}   = 1 ] && args_one
+	[ ${#ARGS[@]} -gt 1 ] && args_many "${ARGS[@]}"
+
+	# echo REMAINING ARGS: ${#ARGS[@]}
+
+	if [ ${#ARGS[@]} = 1 ]; then
+		# Actually change directory
+		# builtin cd "${ARGS[0]}"
+		echo cd "\"${ARGS[0]}\""
+		add_to_history "$(pwd)"
+	fi
+
+	# DIRls : cd DIR; ls
+	if [ "$OPT_LS" = 1 ]; then
+		ls --group-directories-first -lL -T 0 --color=auto -I .\*swp -I lost+found
+	fi
+
+	# dump
+	return 0
+}
+
+
