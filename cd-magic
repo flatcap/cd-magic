@@ -106,7 +106,6 @@ function get_history_entry()
 		return 1
 	fi
 
-	# echo "HISTORY: ${CD_HISTORY[$INDEX]}"
 	ARGS=("${CD_HISTORY[$INDEX]}")
 	return 0
 }
@@ -151,7 +150,6 @@ function save_dir()
 		CD_SAVE_DIR="$DIR"
 	fi
 
-	echo "SET CD_SAVE_DIR $DIR"
 	ARGS=("$DIR")
 	return 0
 }
@@ -182,8 +180,8 @@ function process_git_branch()
 
 	[ "$1" = "$BRANCH" ] && return 0
 
+	ARGS=()
 	git checkout -q "$1"
-	# return if different => need to change caller to alter args
 }
 
 
@@ -270,30 +268,12 @@ function args_many()
 }
 
 
-function dump()
-{
-	echo "OPTIONS: $OPTIONS"
-
-	echo -n "ARGS: "
-	for ARG in "${ARGS[@]}"; do
-		echo -n "'$ARG' "
-	done
-	echo
-
-	echo -n "CD_DIR_LIST: "
-	for DIR in "${CD_DIR_LIST[@]}"; do
-		echo -n "'$DIR' "
-	done
-	echo
-
-	echo "CD_SAVE_DIR: $CD_SAVE_DIR"
-}
-
 function cd()
 {
 	local OPTIONS=""
 	local OPT_LS=0
 	local ARGS=()
+	local RETVAL=0
 
 	parse_command_line "$@"
 
@@ -301,12 +281,10 @@ function cd()
 	[ ${#ARGS[@]}   = 1 ] && args_one
 	[ ${#ARGS[@]} -gt 1 ] && args_many "${ARGS[@]}"
 
-	# echo REMAINING ARGS: ${#ARGS[@]}
-
 	if [ ${#ARGS[@]} = 1 ]; then
 		# Actually change directory
-		# builtin cd "${ARGS[0]}"
-		echo cd "\"${ARGS[0]}\""
+		builtin cd "${ARGS[0]}" >& /dev/null
+		RETVAL=$?
 		add_to_history "$(pwd)"
 	fi
 
@@ -315,8 +293,7 @@ function cd()
 		ls --group-directories-first -lL -T 0 --color=auto -I .\*swp -I lost+found
 	fi
 
-	# dump
-	return 0
+	return $RETVAL
 }
 
 
