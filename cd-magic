@@ -51,7 +51,7 @@ function process_file()
 
 function process_dir()
 {
-	DIR="$1"
+	local DIR="$1"
 	if [ -d "$DIR" ]; then
 		# dot is a no-op
 		[ "$DIR" = "."      ] && return
@@ -135,7 +135,7 @@ function get_list_entry()
 
 function get_history_entry()
 {
-	# cd -		cd "$OLDPWD"
+	# cd -		cd -1
 	# cd -1		HISTORY-1 previous place
 	# cd -2		HISTORY-2 two places ago
 	# cd -3		HISTORY-3 three places ago
@@ -210,10 +210,10 @@ function save_dir()
 
 function get_git_branch()
 {
-	local branch="$(git branch)"
-	branch=${branch##*\* }
-	eval branch=${branch%% *}
-	echo "$branch"
+	local BRANCH="$(git branch)"
+	BRANCH=${BRANCH##*\* }
+	eval BRANCH=${BRANCH%% *}
+	echo "$BRANCH"
 }
 
 function is_git_branch()
@@ -260,7 +260,7 @@ function list_prev()
 {
 	[ ${#CD_DIR_LIST[@]} = 0 ] && echo NO LIST && return 1
 
-	LAST=$((${#CD_DIR_LIST[@]} - 1))
+	local LAST=$((${#CD_DIR_LIST[@]} - 1))
 	CD_DIR_LIST=("${CD_DIR_LIST[@]:$LAST}" "${CD_DIR_LIST[@]:0:$LAST}")
 	ARGS=(${CD_DIR_LIST[0]})
 	return 0
@@ -278,10 +278,12 @@ function list_end()
 function list_show()
 {
 	local DIR
+	local COUNT
+	local i
 
 	if [ "$CD_DIR_LIST" ]; then
 		echo "cd list:"
-		local COUNT=${#CD_DIR_LIST[@]}
+		COUNT=${#CD_DIR_LIST[@]}
 		for ((i = 0; i < COUNT; i++)); do
 			DIR="${CD_DIR_LIST[$i]}"
 			DIR=${DIR/$HOME/\~}
@@ -289,8 +291,7 @@ function list_show()
 		done
 	else
 		echo "cd history:"
-		local COUNT=${#CD_HISTORY[@]}
-		local i
+		COUNT=${#CD_HISTORY[@]}
 		for ((i = 0; i < COUNT; i++)); do
 			DIR="${CD_HISTORY[$i]}"
 			DIR=${DIR/$HOME/\~}
