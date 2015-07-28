@@ -341,6 +341,14 @@ function cd()
 }
 
 
+# Helper functions
+function /()    { cd /; }
+function ~()    { cd ~; }
+function .()    { [ "$1" ] && source "$@" || cd .; }
+function ..()   { cd ..; }
+function ...()  { cd ...; }
+function ....() { cd ....; }
+
 # Seed the history list
 add_to_history $(pwd)
 
