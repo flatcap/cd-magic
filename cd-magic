@@ -222,18 +222,22 @@ function list_end()
 
 function list_show()
 {
+	local DIR
+
 	if [ "$CD_DIR_LIST" ]; then
 		echo "cd list:"
-		local DIR
 		for DIR in "${CD_DIR_LIST[@]}"; do
+			DIR=${DIR/$HOME/\~}
 			echo -e "\t$DIR"
 		done
 	else
 		echo "cd history:"
 		local COUNT=${#CD_HISTORY[@]}
 		local i
-		for ((i = 1; i < COUNT; i++)); do
-			printf "\t%3d %s\n" -$i "${CD_HISTORY[$i]}"
+		for ((i = 0; i < COUNT; i++)); do
+			DIR="${CD_HISTORY[$i]}"
+			DIR=${DIR/$HOME/\~}
+			printf "\t%3d %s\n" -$i "$DIR"
 		done
 	fi
 	return 0
