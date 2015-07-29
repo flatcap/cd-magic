@@ -199,11 +199,12 @@ function save_dir()
 
 	if [ "$DIR" = "$HOME" ]; then
 		unset CD_SAVE_DIR
+		ARGS=()
 	else
 		CD_SAVE_DIR="$DIR"
+		ARGS=("$DIR")
 	fi
 
-	ARGS=("$DIR")
 	return 0
 }
 
