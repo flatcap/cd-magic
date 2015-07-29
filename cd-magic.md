@@ -4,10 +4,18 @@ Change directory (etc)
 
 ## CD - Change Directory
 
-| Command          | Equivalent to | Description                |
-| :--------------- | :------------ | :------------------------- |
-| cd DIR           | cd DIR        | Change directory           |
-| cd /PATH/TO/FILE | cd /PATH/TO   | Change to file's directory |
+| Command                  | Equivalent to        | Description                                                |
+| :----------------------- | :------------------- | :--------------------------------------------------------- |
+| cd                       | cd "$HOME"           | Change to home directory (unless a saved directory exists) |
+| cd DIR                   | cd DIR               | Change directory                                           |
+| cd "DIR WITH SPACES"     | cd "DIR WITH SPACES" | Change directory                                           |
+| cd .                     |                      | No operation                                               |
+| cd PATH/TO/FILE          | cd PATH/TO           | Change to file's directory                                 |
+| cd FILE                  |                      | No operation                                               |
+| cd LINK -> PATH/TO/DIR   | cd LINK              | Change directory following symlink                         |
+| cd LINK -> .             |                      | No operation                                               |
+| cd LINK -> PATH/TO/FILE  | cd PATH/TO           | Change to directory of symlinked file                      |
+| cd LINK -> ./FILE        |                      | No operation                                               |
 
 ## Fake Directories
 
@@ -29,6 +37,8 @@ Change directory (etc)
 | cd -3   | Change to directory 3 changes ago |
 | etc     | and so on...                      |
 
+History is de-duplicated
+
 ## List
 
 | Command               | Description                                                |
@@ -47,6 +57,8 @@ Change directory (etc)
 alias n='cd -n'
 alias p='cd -p'
 
+List is fixed and loops around
+
 ## Save Place
 
 | Command    | Description                               |
@@ -55,6 +67,19 @@ alias p='cd -p'
 | cd -s .    | Save my place, here                       |
 | cd -s DIR  | Change directory and save my place, there |
 | cd -s ~    | Unset my saved place                      |
+
+## Git
+
+| Command       | Description          |
+| :------------ | :------------------- |
+| cd GIT_BRANCH | Checkout git branch  |
+
+## Misc
+
+| Command  | Equivalent to | Description                      |
+| :------- | :------------ | :------------------------------- |
+| cd DIRls | cd DIR; ls    | cd then ls (typo workaround)     |
+| cd -d    | cd $(pwd -P)  | Dereference symlinks in the path |
 
 ## Aliases
 
@@ -68,117 +93,13 @@ alias p='cd -p'
 | ...    | cd ../..    |
 | ....   | cd ../../.. |
 
-## Configuration
+## Environment
 
-CD_DIR_LIST
-CD_HISTORY
-CD_HISTORY_MAX
-CD_LS_COMMAND
-CD_SAVE_DIR
+| Variable       | Description                                        |
+| :------------- | :------------------------------------------------- |
+| CD_DIR_LIST    | Current directory list                             |
+| CD_HISTORY     | Directory history                                  |
+| CD_HISTORY_MAX | Maximum number of entries in the directory history |
+| CD_LS_COMMAND  | Command to run after "cd DIRls"                    |
+| CD_SAVE_DIR    | Current "saved" directory                          |
 
-OPERATIONS
-	cd
-	list
-	saved dir
-	fake-dirs/redirection
-
---------------------------------------------------------------------------------
-MAGIC CD
-
-cd			cd "$HOME"
-cd			cd "$CDDIR"
-
-cd DIRECTORY		cd 'DIRECTORY'
-cd DIR WITH SPACES	cd 'DIR WITH SPACES'
-
-cd PATH/FILE		cd 'PATH'
-cd ./FILE		cd .
-
-cd LINK -> DIR		cd 'LINK'			prompt shows LINK
-cd LINK -> .		NO-OP
-
-cd LINK -> PATH/FILE	cd 'PATH'
-cd LINK -> ./FILE	NO-OP
-
-cd DIRls		cd 'DIR'; ls
-
-cd .			cd $(pwd -P)			prompt shows REAL PATH
-
-cd GIT_BRANCH		git checkout GIT_BRANCH
-cd .			git checkout master
-
-
---------------------------------------------------------------------------------
-cd ..ls -> cd ..; ls;
-any "cd EXISTING_DIRls" -> cd EXISTING_DIR; ls
-cd X -- automatically ls?
-
-function cd()
-{
-	if [[ "$1" =~ "^\.\.+$" ]]; then
-		builtin cd "$(echo $1 | sed -e 's/\.//' -e 's/\./..\//g')"
-	else
-		builtin cd "$@"
-	fi
-}
-
-cd {git-branch}
-	should cddir too
-	git checkout branch
-
-magic cd
-	H = hikes
-	W = work
-	T = todo / torrent?
-	P = public_html
-	autocomplete on each dir
-
-magic cd
-	newly spawned dirs: should they inherit [H|W]?
-	would have to descend dir hierarchy looking for a marker
-	look for .cddir ?
-
-what happens to duplicate entries?
-what happens to list (a, b, c, d) after cd -; cd -; ?
-	option to de-dupe or keep all
-
-magic cd
-in work mode, replace ~/docs with $WORKDIR/docs
-
-bash complete cd
-	check CDPATH
-	fix to allow cd ./<tab> etc
-
-fix cd autocomplete for cd ~/X/...
-
-magic dirs
-	"cd ~/docs" to mean "cd $WORK_DIR/docs"
-	=> substitution before cd
-	=> auto-completion needs to be work_dir aware
-
-_cd_complete ()
-{
-	local cur
-	_get_comp_words_by_ref cur
-	DIR=${cur:-.}
-	[ -d "$DIR" ] || DIR=${DIR%/*}
-	echo
-	echo DIR=$DIR
-	find $DIR -maxdepth 1 ! -name . ! -name .git -type d | cut -b3- | sort -u
-	# COMPREPLY=(
-	# 	$(compgen -W "$(
-	# 		git branch 2> /dev/null;
-	# 		find . -maxdepth 1 ! -name . ! -name .git -type d | cut -b3- | sort -u
-	# 	)" -- "$cur")
-	# )
-}
-complete -F _cd_complete cd
-
-cddir -n DIR
-	set CDDIR, but don't change dir
-
-cddir doesn't respect symlinks (as cd() does)
-
-change CDPATH to include /mnt/space
-
-cd with multiple args activates first/last behaviour
